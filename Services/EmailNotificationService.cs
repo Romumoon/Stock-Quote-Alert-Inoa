@@ -1,16 +1,19 @@
 ﻿using MailKit.Net.Smtp;
 using MimeKit;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace StockQuoteAlert.Services;
 
 public class EmailNotificationService : INotificationService
 {
     private readonly IConfiguration _config;
+    private readonly ILogger<EmailNotificationService> _logger;
 
-    public EmailNotificationService(IConfiguration config)
+    public EmailNotificationService(IConfiguration config, ILogger<EmailNotificationService> logger)
     {
         _config = config;
+        _logger = logger;
     }
 
     public async Task SendAlertAsync(string ticker, decimal currentPrice, string advice)
@@ -33,10 +36,12 @@ public class EmailNotificationService : INotificationService
             await client.AuthenticateAsync(_config["SmtpSettings:Username"], _config["SmtpSettings:Password"]);
             await client.SendAsync(message);
             await client.DisconnectAsync(true);
+
+            _logger.LogInformation("E-mail de {Advice} enviado com sucesso para {Target} (Ticker: {Ticker})", advice, _config["SmtpSettings:TargetEmail"], ticker);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ERRO E-MAIL] {ex.Message}");
+            _logger.LogError(ex, "Falha ao enviar e-mail de alerta para o ativo {Ticker}", ticker);
         }
     }
 }
