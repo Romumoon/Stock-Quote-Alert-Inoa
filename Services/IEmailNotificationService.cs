@@ -1,6 +1,6 @@
 ﻿namespace StockQuoteAlert.Services;
 
-public interface INotificationService
+public interface IEmailNotificationService
 {
     Task SendAlertAsync(string ticker, decimal currentPrice, string advice);
 }

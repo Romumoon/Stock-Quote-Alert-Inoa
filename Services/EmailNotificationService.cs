@@ -5,43 +5,39 @@ using Microsoft.Extensions.Logging;
 
 namespace StockQuoteAlert.Services;
 
-public class EmailNotificationService : INotificationService
+public class EmailNotificationService : IEmailNotificationService
 {
     private readonly IConfiguration _config;
     private readonly ILogger<EmailNotificationService> _logger;
+    private readonly ISmtpClient _smtpClient; // Injetado para permitir Mock
 
-    public EmailNotificationService(IConfiguration config, ILogger<EmailNotificationService> logger)
+    public EmailNotificationService(IConfiguration config, ILogger<EmailNotificationService> logger, ISmtpClient? smtpClient = null)
     {
         _config = config;
         _logger = logger;
+        _smtpClient = smtpClient ?? new SmtpClient();
     }
 
     public async Task SendAlertAsync(string ticker, decimal currentPrice, string advice)
     {
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(_config["SmtpSettings:SenderName"], _config["SmtpSettings:SenderEmail"]));
-        message.To.Add(new MailboxAddress("Investidor", _config["SmtpSettings:TargetEmail"]));
-
+        message.To.Add(new MailboxAddress("Investor", _config["SmtpSettings:TargetEmail"]));
         message.Subject = $"ALERTA B3: {advice} {ticker}";
+
         message.Body = new TextPart("plain")
         {
-            Text = $"Atenção!\n\nO ativo {ticker} atingiu a cotação de R$ {currentPrice:F2}.\n" +
-                   $"Sugerimos realizar a {advice} conforme configurado."
+            Text = $"Atenção!\n\nO ativo {ticker} atingiu R$ {currentPrice:F2}. Sugerimos realizar a {advice}."
         };
 
-        using var client = new SmtpClient();
         try
         {
-            await client.ConnectAsync(_config["SmtpSettings:Server"], int.Parse(_config["SmtpSettings:Port"] ?? "2525"), MailKit.Security.SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_config["SmtpSettings:Username"], _config["SmtpSettings:Password"]);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
-
-            _logger.LogInformation("E-mail de {Advice} enviado com sucesso para {Target} (Ticker: {Ticker})", advice, _config["SmtpSettings:TargetEmail"], ticker);
+            await _smtpClient.ConnectAsync(_config["SmtpSettings:Server"], int.Parse(_config["SmtpSettings:Port"] ?? "587"), MailKit.Security.SecureSocketOptions.StartTls);
+            await _smtpClient.AuthenticateAsync(_config["SmtpSettings:Username"], _config["SmtpSettings:Password"]);
+            await _smtpClient.SendAsync(message);
+            await _smtpClient.DisconnectAsync(true);
+            _logger.LogInformation("Email sent for {Ticker}", ticker);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Falha ao enviar e-mail de alerta para o ativo {Ticker}", ticker);
-        }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to send email."); }
     }
 }
